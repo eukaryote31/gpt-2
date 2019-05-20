@@ -118,7 +118,6 @@ def main(_run):
                     labels=val_context[:, 1:], logits=val_output['logits'][:, :-1]))
             val_loss_summary = tf.summary.scalar('val_loss', val_loss)
 
-
         tf_sample = sample.sample_sequence(
             hparams=hparams,
             length=args.sample_length,
@@ -257,10 +256,10 @@ def main(_run):
                     counter=counter,
                     time=time.time() - start_time,
                     loss=v_val_loss))
+            _run.log_scalar('val_loss', float(v_val_loss), counter)
 
         def sample_batch():
             return [data_sampler.sample(1024) for _ in range(args.batch_size)]
-
 
         avg_loss = (0.0, 0.0)
         start_time = time.time()
