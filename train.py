@@ -216,15 +216,13 @@ def main(_run):
 
         print('Loading dataset...')
         data_sampler = Sampler(enc, args.combine, args.dataset, args.perm_dataset, args.num_cycle_files)
-        if args.val_every > 0:
-            val_chunks = load_dataset(enc, args.val_dataset, args.combine) if args.val_dataset else chunks
         print('dataset has', data_sampler.total_size, 'tokens')
         print('Training...')
 
         if args.val_every > 0:
             # Sample from validation set once with fixed seed to make
             # it deterministic during training as well as across runs.
-            val_data_sampler = Sampler(val_chunks, seed=1)
+            val_data_sampler = Sampler(enc, args.combine, args.val_dataset, args.perm_dataset, args.num_cycle_files, seed=1)
             val_batches = [[val_data_sampler.sample(1024) for _ in range(args.val_batch_size)]
                            for _ in range(args.val_batch_count)]
 
