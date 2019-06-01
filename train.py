@@ -67,6 +67,13 @@ parser.add_argument('--val_batch_size', metavar='SIZE', type=int, default=2, hel
 parser.add_argument('--val_batch_count', metavar='N', type=int, default=40, help='Number of batches for validation.')
 parser.add_argument('--val_every', metavar='STEPS', type=int, default=0, help='Calculate validation loss every STEPS steps.')
 
+parser.add_argument('--hp_head', metavar='', type=int, help='Hyperparam override')
+parser.add_argument('--hp_layer', metavar='', type=int, help='Hyperparam override')
+parser.add_argument('--hp_embd', metavar='', type=int, help='Hyperparam override')
+parser.add_argument('--hp_ctx', metavar='', type=int, help='Hyperparam override')
+parser.add_argument('--train_iters', metavar='', type=int, help='Limit training iters')
+
+
 ex.add_config(vars(parser.parse_args()))
 
 
@@ -93,6 +100,21 @@ def main(_run):
     hparams = model.default_hparams()
     with open(os.path.join('models', args.model_name, 'hparams.json')) as f:
         hparams.override_from_dict(json.load(f))
+
+    # override hyperparameters
+    if args.hp_head:
+        hparams.set_hparam('n_head', args.hp_head)
+
+    if args.hp_layer:
+        hparams.set_hparam('n_layer', args.hp_layer)
+
+    if args.hp_embd:
+        hparams.set_hparam('n_embd', args.hp_embd)
+
+    if args.hp_ctx:
+        hparams.set_hparam('n_ctx', args.hp_ctx)
+
+    print(hparams)
 
     if args.sample_length > hparams.n_ctx:
         raise ValueError(
@@ -183,10 +205,14 @@ def main(_run):
         elif args.restore_from == 'fresh':
             ckpt = tf.train.latest_checkpoint(
                 os.path.join('models', args.model_name))
+        elif args.restore_from == 'scratch':
+            ckpt = None
         else:
             ckpt = tf.train.latest_checkpoint(args.restore_from)
-        print('Loading checkpoint', ckpt)
-        saver.restore(sess, ckpt)
+
+        if ckpt:
+            print('Loading checkpoint', ckpt)
+            saver.restore(sess, ckpt)
 
         print('Loading dataset...')
         data_sampler = Sampler(enc, args.combine, args.dataset, args.perm_dataset, args.num_cycle_files)
@@ -303,6 +329,10 @@ def main(_run):
                 _run.log_scalar('loss', v_loss, counter)
                 _run.log_scalar('perplexity', math.exp(v_loss), counter)
                 _run.log_scalar('gradnorm', v_norm, counter)
+
+                if args.train_iters and args.train_iters < counter:
+                    print('Done Training.')
+                    break
 
                 if counter % args.cycle_every == 0:
                     data_sampler.cycle_files()
