@@ -115,7 +115,7 @@ class Sampler(object):
         self.rs = np.random.RandomState(seed=self.seed)
 
     def cycle_files(self):
-        if len(self.paths) - len(self.chunkindices) == 0:
+        if len(self.paths) - len(self.chunkindices) == 0 or self.num_simultaneous_files == 0:
             # can't cycle :(
             return
         self.chunks = self.chunks[:self.chunkindices[-1][-1] + 1]

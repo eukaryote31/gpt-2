@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-import model
+import gpt2.model as model
+
 
 def top_k_logits(logits, k):
     if k == 0:
@@ -24,7 +25,7 @@ def top_k_logits(logits, k):
 
 def top_p_logits(logits, p):
     with tf.variable_scope('top_p_logits'):
-        logits_sort = tf.sort(logits, direction='DESCENDING')
+        logits_sort = tf.contrib.framework.sort(logits, direction='DESCENDING')
         probs_sort = tf.nn.softmax(logits_sort)
         probs_sums = tf.cumsum(probs_sort, axis=1, exclusive=True)
         logits_masked = tf.where(probs_sums < p, logits_sort, tf.ones_like(logits_sort)*1000) # [batchsize, vocab]

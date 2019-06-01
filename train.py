@@ -4,6 +4,7 @@
 
 import argparse
 import json
+import math
 import os
 import numpy as np
 import tensorflow as tf
@@ -13,9 +14,12 @@ from tensorflow.core.protobuf import rewriter_config_pb2
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-import model, sample, encoder
-from load_dataset import load_dataset, Sampler
-from accumulate import AccumulatingOptimizer
+import gpt2.model as model
+import gpt2.sample as sample
+import gpt2.encoder as encoder
+
+from gpt2.load_dataset import load_dataset, Sampler
+from gpt2.accumulate import AccumulatingOptimizer
 import memory_saving_gradients
 
 ex = Experiment('gpt2-345M-finetune-tf')
@@ -297,6 +301,7 @@ def main(_run):
                         loss=v_loss,
                         avg=avg_loss[0] / avg_loss[1]))
                 _run.log_scalar('loss', v_loss, counter)
+                _run.log_scalar('perplexity', math.exp(v_loss), counter)
                 _run.log_scalar('gradnorm', v_norm, counter)
 
                 if counter % args.cycle_every == 0:

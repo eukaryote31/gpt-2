@@ -1,4 +1,4 @@
-import load_dataset
+import gpt2.load_dataset as load_dataset
 import unittest
 import numpy as np
 import copy
