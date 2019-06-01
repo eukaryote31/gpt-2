@@ -98,6 +98,7 @@ class Sampler(object):
         self.seed = seed
 
         if shuffle:
+            random.seed(seed)
             random.shuffle(self.paths)
         self.chunks, self.chunkindices = self.load_dataset(enc, self.paths[:num_simultaneous_files], combine)
         self.cycleindex = 0
