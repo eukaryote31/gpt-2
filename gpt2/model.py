@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.training import HParams
+from blocksparse import BlocksparseTransformer
+from gpt2.sparse.attention import blocksparse_attention_impl
 
 def default_hparams():
     return HParams(
@@ -90,25 +92,26 @@ def attn(x, scope, n_state, *, past, hparams):
 
     def multihead_attn(q, k, v):
         # q, k, v have shape [batch, heads, sequence, features]
-        w = tf.matmul(q, k, transpose_b=True)
-        w = w * tf.rsqrt(tf.cast(v.shape[-1].value, w.dtype))
-
-        w = mask_attn_weights(w)
-        w = softmax(w)
-        a = tf.matmul(w, v)
+        a = blocksparse_attention_impl(q, k, v, heads=hparams.n_head, attn_mode="fixed", local_attn_ctx=128, num_verts=4, vertsize=1, blocksize=32, recompute=True)
         return a
 
     with tf.variable_scope(scope):
         c = conv1d(x, 'c_attn', n_state*3)
-        q, k, v = map(split_heads, tf.split(c, 3, axis=2))
+        q, k, v = tf.split(c, 3, axis=2)
+
+        batch, _, embd = shape_list(k)
+        k = tf.reshape(k, [batch, _, hparams.n_head, embd // hparams.n_head])
+        k = tf.transpose(k, [0, 2, 1, 3])
+        v = tf.reshape(v, [batch, _, hparams.n_head, embd // hparams.n_head])
+        v = tf.transpose(v, [0, 2, 1, 3])
         present = tf.stack([k, v], axis=1)
         if past is not None:
             pk, pv = tf.unstack(past, axis=1)
             k = tf.concat([pk, k], axis=-2)
             v = tf.concat([pv, v], axis=-2)
         a = multihead_attn(q, k, v)
-        a = merge_heads(a)
         a = conv1d(a, 'c_proj', n_state)
+
         return a, present
 
 
@@ -164,7 +167,15 @@ def model(hparams, X, past=None, scope='model', reuse=tf.AUTO_REUSE):
             h, present = block(h, 'h%d' % layer, past=past, hparams=hparams)
             tf.add_to_collection('checkpoints', h)
             presents.append(present)
-        results['present'] = tf.stack(presents, axis=1)
+        presents = tf.stack(presents, axis=1)
+        assert hparams.n_embd % hparams.n_head == 0     # somewhat redundant but you can never be too sure
+
+        # (B, L, k&v, ctx, embd) -> (B, L, k&v, heads, xtz, embd per head)
+
+        presents = tf.reshape(presents, [batch, hparams.n_layer, 2, hparams.n_ctx, hparams.n_head, hparams.n_embd // hparams.n_head])
+        presents = tf.transpose(presents, [0, 1, 2, 4, 3, 5])
+
+        results['present'] = presents
         h = norm(h, 'ln_f')
 
         # Language model loss.  Do tokens <n predict token n?
@@ -172,4 +183,7 @@ def model(hparams, X, past=None, scope='model', reuse=tf.AUTO_REUSE):
         logits = tf.matmul(h_flat, wte, transpose_b=True)
         logits = tf.reshape(logits, [batch, sequence, hparams.n_vocab])
         results['logits'] = logits
+
+        print('ps', results['present'].shape)
+        print('ls', logits.shape)
         return results
